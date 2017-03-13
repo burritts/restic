@@ -18,7 +18,6 @@ package minio
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -37,16 +36,19 @@ func TestMakeBucketErrorV2(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping functional tests for short runs")
 	}
+	if os.Getenv("S3_ADDRESS") != "s3.amazonaws.com" {
+		t.Skip("skipping region functional tests for non s3 runs")
+	}
 
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -89,10 +91,10 @@ func TestGetObjectClosedTwiceV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -113,13 +115,8 @@ func TestGetObjectClosedTwiceV2(t *testing.T) {
 		t.Fatal("Error:", err, bucketName)
 	}
 
-	// Generate data more than 32K
-	buf := make([]byte, rand.Intn(1<<20)+32*1024)
-
-	_, err = io.ReadFull(crand.Reader, buf)
-	if err != nil {
-		t.Fatal("Error:", err)
-	}
+	// Generate data more than 32K.
+	buf := bytes.Repeat([]byte("h"), rand.Intn(1<<20)+32*1024)
 
 	// Save the data
 	objectName := randString(60, rand.NewSource(time.Now().UnixNano()), "")
@@ -174,10 +171,10 @@ func TestRemovePartiallyUploadedV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -198,15 +195,18 @@ func TestRemovePartiallyUploadedV2(t *testing.T) {
 		t.Fatal("Error:", err, bucketName)
 	}
 
+	r := bytes.NewReader(bytes.Repeat([]byte("a"), 128*1024))
+
 	reader, writer := io.Pipe()
 	go func() {
 		i := 0
 		for i < 25 {
-			_, err = io.CopyN(writer, crand.Reader, 128*1024)
+			_, err = io.CopyN(writer, r, 128*1024)
 			if err != nil {
 				t.Fatal("Error:", err, bucketName)
 			}
 			i++
+			r.Seek(0, 0)
 		}
 		writer.CloseWithError(errors.New("Proactively closed to be verified later."))
 	}()
@@ -241,10 +241,10 @@ func TestResumablePutObjectV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -271,8 +271,9 @@ func TestResumablePutObjectV2(t *testing.T) {
 		t.Fatal("Error:", err)
 	}
 
+	r := bytes.NewReader(bytes.Repeat([]byte("b"), 11*1024*1024))
 	// Copy 11MiB worth of random data.
-	n, err := io.CopyN(file, crand.Reader, 11*1024*1024)
+	n, err := io.CopyN(file, r, 11*1024*1024)
 	if err != nil {
 		t.Fatal("Error:", err)
 	}
@@ -352,10 +353,10 @@ func TestFPutObjectV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -382,7 +383,8 @@ func TestFPutObjectV2(t *testing.T) {
 		t.Fatal("Error:", err)
 	}
 
-	n, err := io.CopyN(file, crand.Reader, 11*1024*1024)
+	r := bytes.NewReader(bytes.Repeat([]byte("b"), 11*1024*1024))
+	n, err := io.CopyN(file, r, 11*1024*1024)
 	if err != nil {
 		t.Fatal("Error:", err)
 	}
@@ -500,10 +502,10 @@ func TestResumableFPutObjectV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -529,7 +531,8 @@ func TestResumableFPutObjectV2(t *testing.T) {
 		t.Fatal("Error:", err)
 	}
 
-	n, err := io.CopyN(file, crand.Reader, 11*1024*1024)
+	r := bytes.NewReader(bytes.Repeat([]byte("b"), 11*1024*1024))
+	n, err := io.CopyN(file, r, 11*1024*1024)
 	if err != nil {
 		t.Fatal("Error:", err)
 	}
@@ -571,16 +574,19 @@ func TestMakeBucketRegionsV2(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping functional tests for short runs")
 	}
+	if os.Getenv("S3_ADDRESS") != "s3.amazonaws.com" {
+		t.Skip("skipping region functional tests for non s3 runs")
+	}
 
 	// Seed random based on current time.
 	rand.Seed(time.Now().Unix())
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -628,10 +634,10 @@ func TestGetObjectReadSeekFunctionalV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -652,15 +658,10 @@ func TestGetObjectReadSeekFunctionalV2(t *testing.T) {
 		t.Fatal("Error:", err, bucketName)
 	}
 
-	// Generate data more than 32K
-	buf := make([]byte, rand.Intn(1<<20)+32*1024)
+	// Generate data more than 32K.
+	buf := bytes.Repeat([]byte("2"), rand.Intn(1<<20)+32*1024)
 
-	_, err = io.ReadFull(crand.Reader, buf)
-	if err != nil {
-		t.Fatal("Error:", err)
-	}
-
-	// Save the data
+	// Save the data.
 	objectName := randString(60, rand.NewSource(time.Now().UnixNano()), "")
 	n, err := c.PutObject(bucketName, objectName, bytes.NewReader(buf), "binary/octet-stream")
 	if err != nil {
@@ -716,7 +717,7 @@ func TestGetObjectReadSeekFunctionalV2(t *testing.T) {
 	}
 
 	var buffer1 bytes.Buffer
-	if n, err = io.CopyN(&buffer1, r, st.Size); err != nil {
+	if _, err = io.CopyN(&buffer1, r, st.Size); err != nil {
 		if err != io.EOF {
 			t.Fatal("Error:", err)
 		}
@@ -766,10 +767,10 @@ func TestGetObjectReadAtFunctionalV2(t *testing.T) {
 
 	// Instantiate new minio client object.
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -791,12 +792,7 @@ func TestGetObjectReadAtFunctionalV2(t *testing.T) {
 	}
 
 	// Generate data more than 32K
-	buf := make([]byte, rand.Intn(1<<20)+32*1024)
-
-	_, err = io.ReadFull(crand.Reader, buf)
-	if err != nil {
-		t.Fatal("Error:", err)
-	}
+	buf := bytes.Repeat([]byte("8"), rand.Intn(1<<20)+32*1024)
 
 	// Save the data
 	objectName := randString(60, rand.NewSource(time.Now().UnixNano()), "")
@@ -907,10 +903,10 @@ func TestCopyObjectV2(t *testing.T) {
 
 	// Instantiate new minio client object
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -938,12 +934,7 @@ func TestCopyObjectV2(t *testing.T) {
 	}
 
 	// Generate data more than 32K
-	buf := make([]byte, rand.Intn(1<<20)+32*1024)
-
-	_, err = io.ReadFull(crand.Reader, buf)
-	if err != nil {
-		t.Fatal("Error:", err)
-	}
+	buf := bytes.Repeat([]byte("9"), rand.Intn(1<<20)+32*1024)
 
 	// Save the data
 	objectName := randString(60, rand.NewSource(time.Now().UnixNano()), "")
@@ -958,7 +949,7 @@ func TestCopyObjectV2(t *testing.T) {
 	}
 
 	// Set copy conditions.
-	copyConds := NewCopyConditions()
+	copyConds := CopyConditions{}
 	err = copyConds.SetModified(time.Date(2014, time.April, 0, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -1029,10 +1020,10 @@ func TestFunctionalV2(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 
 	c, err := NewV2(
-		"s3.amazonaws.com",
+		os.Getenv("S3_ADDRESS"),
 		os.Getenv("ACCESS_KEY"),
 		os.Getenv("SECRET_KEY"),
-		true,
+		mustParseBool(os.Getenv("S3_SECURE")),
 	)
 	if err != nil {
 		t.Fatal("Error:", err)
@@ -1109,11 +1100,7 @@ func TestFunctionalV2(t *testing.T) {
 	objectName := bucketName + "unique"
 
 	// Generate data
-	buf := make([]byte, rand.Intn(1<<19))
-	_, err = io.ReadFull(crand.Reader, buf)
-	if err != nil {
-		t.Fatal("Error: ", err)
-	}
+	buf := bytes.Repeat([]byte("n"), rand.Intn(1<<19))
 
 	n, err := c.PutObject(bucketName, objectName, bytes.NewReader(buf), "")
 	if err != nil {
@@ -1243,11 +1230,9 @@ func TestFunctionalV2(t *testing.T) {
 	if err != nil {
 		t.Fatal("Error: ", err)
 	}
-	buf = make([]byte, rand.Intn(1<<20))
-	_, err = io.ReadFull(crand.Reader, buf)
-	if err != nil {
-		t.Fatal("Error: ", err)
-	}
+	// Generate data more than 32K
+	buf = bytes.Repeat([]byte("1"), rand.Intn(1<<20)+32*1024)
+
 	req, err := http.NewRequest("PUT", presignedPutURL.String(), bytes.NewReader(buf))
 	if err != nil {
 		t.Fatal("Error: ", err)

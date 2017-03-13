@@ -20,13 +20,14 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/minio/minio-go"
 )
 
 func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY and my-bucketname are
-	// dummy values, please replace them with original values.
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY, my-testfile, my-bucketname and
+	// my-objectname are dummy values, please replace them with original values.
 
 	// Requests are always secure (HTTPS) by default. Set secure=false to enable insecure (HTTP) access.
 	// This boolean value is the last argument for New().
@@ -38,14 +39,45 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	found, err := s3Client.BucketExists("my-bucketname")
+	// Open a local file that we will upload
+	file, err := os.Open("my-testfile")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer file.Close()
+
+	//// Build an asymmetric key from private and public files
+	//
+	// privateKey, err := ioutil.ReadFile("private.key")
+	// if err != nil {
+	//	t.Fatal(err)
+	// }
+	//
+	// publicKey, err := ioutil.ReadFile("public.key")
+	// if err != nil {
+	//	t.Fatal(err)
+	// }
+	//
+	// asymmetricKey, err := NewAsymmetricKey(privateKey, publicKey)
+	// if err != nil {
+	//	t.Fatal(err)
+	// }
+	////
+
+	// Build a symmetric key
+	symmetricKey := minio.NewSymmetricKey([]byte("my-secret-key-00"))
+
+	// Build encryption materials which will encrypt uploaded data
+	cbcMaterials, err := minio.NewCBCSecureMaterials(symmetricKey)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	if found {
-		log.Println("Bucket found.")
-	} else {
-		log.Println("Bucket not found.")
+	// Encrypt file content and upload to the server
+	n, err := s3Client.PutEncryptedObject("my-bucketname", "my-objectname", file, cbcMaterials, nil, nil)
+	if err != nil {
+		log.Fatalln(err)
 	}
+
+	log.Println("Uploaded", "my-objectname", " of size: ", n, "Successfully.")
 }
